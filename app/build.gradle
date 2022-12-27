@@ -41,12 +41,13 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.1.4'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.0'
 
-//    implementation "org.tensorflow:tensorflow-lite:+"
 
     implementation 'com.opencsv:opencsv:4.6'
     implementation 'com.github.salehyarahmadi:FileAndFolderPicker:1.0.4'
 
     implementation 'org.tensorflow:tensorflow-lite:2.2.0'
     implementation 'org.tensorflow:proto:1.15.0'
+
+    implementation 'com.github.codekidX:storage-chooser:2.0.4.4'
 
 }

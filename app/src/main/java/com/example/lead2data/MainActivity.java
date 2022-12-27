@@ -4,6 +4,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.pm.PackageManager;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
@@ -16,7 +17,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 
+import com.codekidlabs.storagechooser.StorageChooser;
+
+import org.apache.commons.lang3.ArrayUtils;
 import org.tensorflow.lite.Interpreter;
+import org.tensorflow.lite.Tensor;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -31,31 +36,21 @@ import ir.androidexception.filepicker.dialog.SingleFilePickerDialog;
 
 
 public class MainActivity extends AppCompatActivity {
+    private int[] shape;
     private TextView textOutput;
     private Button btnFileInput;
     private Button btnFileOutput;
+    private Button btnFileOutput2;
     private ReadCSVThread readCSVThread;
     private ArrayList<String> csvDataList = new ArrayList<>();
-    private ArrayList<Float> csvDataListFloat = new ArrayList<Float>();
-    private ArrayList<Float> csvDataListFloatFinish = new ArrayList<>();
-
-    private List<Float> listFloat = new ArrayList<Float>() {
-    };
-    private List<Float> listFloat2 = new ArrayList<Float>() {
-    };
-    private List<Float> listFloatPartA = new ArrayList<Float>() {
-    };
-    private List<Float> listFloatPartB = new ArrayList<Float>() {
-    };
-    private int[] shape;
-    private float[] input1Array;
-    private float[] input2Array;
-    private float[][] array;
     private float[][][] reshapedArray;
-
+    private float[][][] reshapedArray2;
     private final String mModelPath = "mymodel.tflite";
+    private final String mModelPath_loose = "mymodel_loose.tflite";
     private Interpreter interpreter;
+    private String checkSignal;
 
+    @SuppressLint("MissingInflatedId")
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -64,31 +59,95 @@ public class MainActivity extends AppCompatActivity {
         textOutput = findViewById(R.id.textOutput);
         btnFileInput = findViewById(R.id.btnFileInput);
         btnFileOutput = findViewById(R.id.btnFileOutput);
+        btnFileOutput2 = findViewById(R.id.btnFileOutput2);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
                 && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1000);
         }
-//        mHandler = new MHandler();
-
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 1);
+        }
         try {
             readCSV();
             initInterpreter();
             initPredict();
+            initChooser();
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public void initChooser() {
+        btnFileInput.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                StorageChooser chooser = new StorageChooser.Builder()
+                        .withActivity(MainActivity.this)
+                        .withFragmentManager(getFragmentManager())
+                        .withMemoryBar(true)
+                        .allowCustomPath(true)
+                        .setType(StorageChooser.FILE_PICKER)
+                        .build();
+                chooser.show();
+
+                chooser.setOnSelectListener(new StorageChooser.OnSelectListener() {
+                    @Override
+                    public void onSelect(String path) {
+                        openCSV(path);
+                    }
+                });
+            }
+        });
     }
 
     public void initPredict() {
         btnFileOutput.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                long startTime = System.currentTimeMillis();
                 float[] result = doInference(reshapedArray);
-                Log.d("bbbb", "onClick: " + Arrays.toString(result));
-                                runOnUiThread(() -> {
-                    textOutput.setText(Arrays.toString(result));
+                for (float f : result) {
+                    if (f < 0.5) {
+                        checkSignal = "壞訊號";
+                    } else {
+                        checkSignal = "好訊號";
+                    }
+                }
+
+                runOnUiThread(() -> {
+                    long endTime = System.currentTimeMillis();
+                    float elapsedTime = (endTime - startTime)/1000;
+                    textOutput.setText(Arrays.toString(result)+"\n"+checkSignal+"\n使用"+elapsedTime+"秒");
+                });
+            }
+        });
+        btnFileOutput2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                long startTime = System.currentTimeMillis();
+                float[] result = doInference(reshapedArray);
+                float[] result2 = doInference(reshapedArray2);
+                float[] combined = ArrayUtils.addAll(result, result2);
+                boolean isGood = true;
+                for (float f : combined) {
+                    if (f < 0.5) {
+                        isGood = false;
+                    }
+                    break;
+                }
+                if (isGood) {
+                    checkSignal = "好訊號";
+                } else {
+                    checkSignal = "壞訊號";
+                }
+                runOnUiThread(() -> {
+                    long endTime = System.currentTimeMillis();
+                    float elapsedTime = (endTime - startTime)/1000;
+                    textOutput.setText(Arrays.toString(combined)+"\n"+checkSignal+"\n使用"+elapsedTime+"秒");
                 });
             }
         });
@@ -96,49 +155,22 @@ public class MainActivity extends AppCompatActivity {
 
     public void initInterpreter() throws Exception {
         Interpreter.Options options = new Interpreter.Options();
-        options.setNumThreads(4);
+        options.setNumThreads(8);
         options.setUseNNAPI(true);
-        interpreter = new Interpreter(loadModelFile(getAssets(), mModelPath), options);
 
-        interpreter.getInputTensor(0);
-        int input_tensor_count = interpreter.getInputTensorCount();
-        // 遍歷每個輸入張量
-        for (int i = 0; i < input_tensor_count; i++) {
-            // 獲取輸入張量的形狀
-            shape = interpreter.getInputTensor(i).shape();
-            Log.d("gggg", "initInterpreter: " + shape);
-        }
+//        interpreter = new Interpreter(loadModelFile(getAssets(), mModelPath), options);
+        interpreter = new Interpreter(loadModelFile(getAssets(), mModelPath_loose), options);
 
-//        int output_tensor_count = interpreter.getOutputTensorCount();
-//        // 遍歷每個輸入張量
-//        for (int i = 0; i < output_tensor_count; i++) {
-//            // 獲取輸出張量的形狀
-//            int[] shape2 = interpreter.getOutputTensor(i).shape();
-//            Log.d("gggg", "init: "+Arrays.toString(shape2));
-//        }
-//        Tensor filterTensor = interpreter.getInputTensor(0);
-//        int[] shape3 = filterTensor.shape();
-//        for (int i = 0; i < shape3.length; i++) {
-//            Log.d("gggg", "sf: "+Arrays.toString(shape3));
-//        }
     }
 
-    public float[] doInference(float[][][] daa) {
+    public float[] doInference(float[][][] data) {
+
         float[][] outputs = new float[1][1];
-        interpreter.run(daa,outputs);
+        interpreter.run(data, outputs);
 
         float[] outputArray = new float[1];
         outputArray[0] = outputs[0][0];
         return outputArray;
-    }
-
-    private MappedByteBuffer loadModelFile(AssetManager assetManager, String modelPath) throws IOException {
-        AssetFileDescriptor fileDescriptor = assetManager.openFd(modelPath);
-        FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
-        FileChannel fileChannel = inputStream.getChannel();
-        long startOffset = fileDescriptor.getStartOffset();
-        long declaredLength = fileDescriptor.getDeclaredLength();
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
     }
 
     public void readCSV() {
@@ -146,8 +178,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 SingleFilePickerDialog singleFilePickerDialog = new SingleFilePickerDialog(MainActivity.this,
-                        () -> textOutput.setText("Canceled!!"),
-                        files -> openCSV(files[0].getPath()));
+                                () -> textOutput.setText("取消選取"),
+                                files -> openCSV(files[0].getPath()));
                 singleFilePickerDialog.show();
             }
         });
@@ -157,60 +189,37 @@ public class MainActivity extends AppCompatActivity {
         if (fileName != "") {
             readCSVThread = new ReadCSVThread(fileName);
             readCSVThread.run();
-            csvDataList.clear();
-            csvDataList.addAll(readCSVThread.csvArray);
-            csvDataList.remove(0);
-            if (csvDataList.size() > 24000) {
-                int selectTime = (csvDataList.size() - 24000) / 2;
-
-                for (int i = 0; i < csvDataList.size(); i++) {
-                    csvDataListFloat.add(Float.valueOf(csvDataList.get(i)));
-                }
-                listFloat = csvDataListFloat.subList(selectTime, csvDataListFloat.size() - selectTime);
-                listFloat2 = listFloat.subList(0, 24000);
-                listFloatPartA = listFloat2.subList(0, 12000);
-                listFloatPartB = listFloat2.subList(12000, 24000);
-
-                input1Array = new float[listFloatPartA.size()];
-                for (int i = 0; i < listFloatPartA.size(); i++) {
-                    input1Array[i] = listFloatPartA.get(i);
-                }
-                input2Array = new float[listFloatPartB.size()];
-                for (int i = 0; i < listFloatPartB.size(); i++) {
-                    input2Array[i] = listFloatPartB.get(i);
-                }
-                float[] rawSignalSubarray = Arrays.copyOfRange(input1Array, 0, 12000);
-                reshapedArray = new float[1][12000][1];
-                for (int i = 0; i < 12000; i++) {
-                    reshapedArray[0][i][0] = rawSignalSubarray[i];
-                }
-
-
-            } else {
-                Toast.makeText(this, "資料錯誤", Toast.LENGTH_LONG).show();
+            List<Float> floatData = new ArrayList<>(readCSVThread.csvFloat);
+            textOutput.setText("匯入資料成功");
+            float[] inputArray = new float[floatData.size()];
+            for (int i = 0; i < floatData.size(); i++) {
+                inputArray[i] = floatData.get(i);
             }
-            textOutput.setText("Success!!");
+
+            float[] rawSignalFirst = Arrays.copyOfRange(inputArray, 0, 12000);
+            float[] rawSignalSecond = Arrays.copyOfRange(inputArray, 12000, 24000);
+            Log.d("checkkkk", "openCSV: "+rawSignalSecond.length);
+
+            reshapedArray = new float[1][12000][1];
+            for (int i = 0; i < 12000; i++) {
+                reshapedArray[0][i][0] = rawSignalFirst[i];
+            }
+            reshapedArray2 = new float[1][12000][1];
+            for (int i = 1; i < 12000; i++) {
+                reshapedArray2[0][i][0] = rawSignalSecond[i];
+            }
+
+
         } else {
             textOutput.setText("PLS INPUT!!");
         }
-
     }
-
-    /**
-     * 接收線程裡的資料
-     */
-//    class MHandler extends Handler {
-//        @Override
-//        public void handleMessage(@NonNull Message msg) {
-//            super.handleMessage(msg);
-//            switch (msg.what) {
-//                case MESSAGE_TYPE_1:
-//                    backData = (float[]) msg.obj;
-//                    break;
-//                case MESSAGE_TYPE_2:
-//                    backData2 = (float[]) msg.obj;
-//                    break;
-//            }
-//        }
-//    }
+    private MappedByteBuffer loadModelFile(AssetManager assetManager, String modelPath) throws IOException {
+        AssetFileDescriptor fileDescriptor = assetManager.openFd(modelPath);
+        FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
+        FileChannel fileChannel = inputStream.getChannel();
+        long startOffset = fileDescriptor.getStartOffset();
+        long declaredLength = fileDescriptor.getDeclaredLength();
+        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
+    }
 }

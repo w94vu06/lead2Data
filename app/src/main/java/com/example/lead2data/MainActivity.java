@@ -51,9 +51,9 @@ public class MainActivity extends AppCompatActivity {
     private final String mModelPath_loose = "mymodel_loose.tflite";
     private Interpreter interpreter;
     private String checkSignal;
-    private String getPath;
     private CellData cell;
-    ArrayList sample2 = new ArrayList();
+    ArrayList<String> sample2 = new ArrayList();
+    ArrayList<Float> sample3 = new ArrayList();
 
     @SuppressLint("MissingInflatedId")
     @Override
@@ -78,7 +78,10 @@ public class MainActivity extends AppCompatActivity {
         btnFileOutput = findViewById(R.id.btnFileOutput);
         btnFileOutput2 = findViewById(R.id.btnFileOutput2);
     }
-    /** 檢查權限*/
+
+    /**
+     * 檢查權限
+     */
     public void initPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
                 && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
@@ -91,7 +94,10 @@ public class MainActivity extends AppCompatActivity {
             requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 1);
         }
     }
-    /** 檔案選擇器*/
+
+    /**
+     * 檔案選擇器
+     */
     public void initChooser() {
         btnFileInput.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -114,14 +120,15 @@ public class MainActivity extends AppCompatActivity {
                         if (path.contains(".CHA")) {
                             readCHA(path);
                         }
-                        getPath = path;
-
                     }
                 });
             }
         });
     }
-    /** 直譯器*/
+
+    /**
+     * 直譯器
+     */
     public void initInterpreter() throws IOException {
         Interpreter.Options options = new Interpreter.Options();
         options.setNumThreads(8);
@@ -138,6 +145,7 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View view) {
                 long startTime = System.currentTimeMillis();
                 float[] result = doInference(reshapedArray);
+                Log.d("gggg", "onClick: " + reshapedArray.length);
                 for (float f : result) {
                     if (f < 0.5) {
                         checkSignal = "壞訊號";
@@ -180,7 +188,10 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
-    /** 預測*/
+
+    /**
+     * 預測
+     */
     public float[] doInference(float[][][] data) {
 
         float[][] outputs = new float[1][1];
@@ -190,13 +201,16 @@ public class MainActivity extends AppCompatActivity {
         outputArray[0] = outputs[0][0];
         return outputArray;
     }
-    /** 讀CHA*/
+
+    /**
+     * 讀CHA
+     */
     public void readCHA(String fileName) {
         try {
             int x = 64;
             char[] a = new char[32 * 1024 * 1024];
-            int cha_size = LcndUtil.len(getPath, a);
-            byte[] content = LcndUtil.readFromByteFile(getPath);
+            int cha_size = LcndUtil.len(fileName, a);
+            byte[] content = LcndUtil.readFromByteFile(fileName);
             /** Lead1 */
             ArrayList CHA_LI_dataNum = new ArrayList();
             ArrayList CHA_LI_data16 = new ArrayList();
@@ -250,10 +264,32 @@ public class MainActivity extends AppCompatActivity {
                 List<String> myList = new ArrayList<>(Arrays.asList(f.split(",")));
                 sample2.addAll(myList);
             }
+            List<Float> floatData = new ArrayList<>();
             for (int i = 0; i < sample2.size(); i++) {
-                int k = Integer.parseInt(sample2.get(i).toString());
-                sample2.set(i, ((k - 2048) * 5) * 0.001);
+                int k = Integer.parseInt(sample2.get(i));
+                sample3.add(Float.valueOf(sample2.get(i)));
+                sample3.set(i, (float) (((k - 2048) * 5) * 0.001));
             }
+            floatData.addAll(sample3);
+            textOutput.setText("匯入資料成功");
+            float[] inputArray = new float[floatData.size()];
+
+            for (int i = 0; i < floatData.size(); i++) {
+                inputArray[i] = floatData.get(i);
+            }
+
+            float[] rawSignalFirst = Arrays.copyOfRange(inputArray, 0, 12000);
+            float[] rawSignalSecond = Arrays.copyOfRange(inputArray, 12000, 24000);
+            reshapedArray = new float[1][12000][1];
+            for (int i = 0; i < 12000; i++) {
+                reshapedArray[0][i][0] = rawSignalFirst[i];
+            }
+
+            reshapedArray2 = new float[1][12000][1];
+            for (int i = 1; i < 12000; i++) {
+                reshapedArray2[0][i][0] = rawSignalSecond[i];
+            }
+
         } catch (Exception ignored) {
 
         }
@@ -300,7 +336,10 @@ public class MainActivity extends AppCompatActivity {
         }
         cell = new CellData(len, newCell, spv, dataV);
     }
-    /** 讀CSV*/
+
+    /**
+     * 讀CSV
+     */
     private void openCSV(String fileName) {
         if (fileName != "") {
             readCSVThread = new ReadCSVThread(fileName);
@@ -328,7 +367,14 @@ public class MainActivity extends AppCompatActivity {
             textOutput.setText("PLS INPUT!!");
         }
     }
-    /** 讀TFLite模*/
+
+    private void processData() {
+
+    }
+
+    /**
+     * 讀TFLite模
+     */
     private MappedByteBuffer loadModelFile(AssetManager assetManager, String modelPath) throws IOException {
         AssetFileDescriptor fileDescriptor = assetManager.openFd(modelPath);
         FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());

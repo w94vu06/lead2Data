@@ -6,44 +6,19 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
+
     <TextView
         android:id="@+id/textOutput"
-        android:layout_width="match_parent"
-        android:layout_height="131dp"
+        android:layout_width="321dp"
+        android:layout_height="302dp"
         android:text="N/A"
         android:textAlignment="center"
-        android:textSize="30dp"
+        android:textSize="28dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.095" />
-
-
-    <Button
-        android:id="@+id/btnFileInput"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="匯入檔案"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.498"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.572" />
-
-    <Button
-        android:id="@+id/btnFileOutput"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="預測一段訊號"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.223"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.71" />
+        app:layout_constraintVertical_bias="0.104" />
 
     <Button
         android:id="@+id/btnFileOutput2"
@@ -52,9 +27,33 @@
         android:text="預測兩段訊號"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.791"
+        app:layout_constraintHorizontal_bias="0.783"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.71" />
+        app:layout_constraintVertical_bias="0.913" />
+
+    <Button
+        android:id="@+id/btnFileInput"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="匯入檔案"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.492"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.775" />
+
+    <Button
+        android:id="@+id/btnFileOutput"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="預測一段訊號"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.216"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.913" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

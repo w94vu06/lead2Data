@@ -16,6 +16,7 @@ public class ReadCSVThread extends Thread{
     String fileName;
     List<Float> csvFloat = new ArrayList<>();
     ArrayList<String> csvArray = new ArrayList<>();
+
     public ReadCSVThread(String fileName) {
         this.fileName = fileName;
     }

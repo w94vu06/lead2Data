@@ -1,5 +1,12 @@
 package com.example.lead2data;
 
+import android.content.res.AssetFileDescriptor;
+import android.content.res.AssetManager;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -8,7 +15,7 @@ public class ProcessData extends Thread {
     String fileName;
     CellData cell;
     ArrayList<Float> finalCHAData = new ArrayList();
-
+    //處理CHA
     public ProcessData(String fileName) {
         this.fileName = fileName;
     }
@@ -126,4 +133,7 @@ public class ProcessData extends Thread {
         }
         cell = new CellData(len, newCell, spv, dataV);
     }
+
+
+
 }

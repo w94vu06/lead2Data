@@ -1,33 +1,53 @@
 package com.example.lead2data;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
+import android.graphics.Color;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.StrictMode;
+import android.provider.DocumentsContract;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
-
-import com.codekidlabs.storagechooser.StorageChooser;
+import com.github.mikephil.charting.charts.LineChart;
+import com.github.mikephil.charting.components.XAxis;
+import com.github.mikephil.charting.components.YAxis;
+import com.github.mikephil.charting.data.Entry;
+import com.github.mikephil.charting.data.LineData;
+import com.github.mikephil.charting.data.LineDataSet;
+import com.github.mikephil.charting.listener.BarLineChartTouchListener;
+import com.obsez.android.lib.filechooser.ChooserDialog;
 
 import org.apache.commons.lang3.ArrayUtils;
 import org.tensorflow.lite.Interpreter;
 
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 
 import tw.com.jchang.geniiecgbt.decompNDK;
@@ -35,21 +55,39 @@ import tw.com.jchang.geniiecgbt.decompNDK;
 
 public class MainActivity extends AppCompatActivity {
     private TextView textOutput;
+    private TextView textOutput2;
     private Button btnFileInput;
     private Button btnFileOutput;
     private Button btnFileOutput2;
-    private ReadCSVThread readCSVThread;
+
+    //處理資料
     private ProcessData processData;
-    private ArrayList<String> csvDataList = new ArrayList<>();
     private float[][][] reshapedArray;
     private float[][][] reshapedArray2;
+    private ReadCSVThread readCSVThread;
+    private BpmCountThread bpmCountThread;
+    //最大最小
+    private float minValue = Float.MAX_VALUE;
+    private float maxValue = 0;
+    private float minValueA = Float.MAX_VALUE;
+    private float maxValueA = 0;
+    private float minValueB = Float.MAX_VALUE;
+    private float maxValueB = 0;
+    //TFLite
+    private String checkSignal;
+    private Interpreter interpreter;
     private final String mModelPath = "mymodel.tflite";
     private final String mModelPath_loose = "mymodel_loose.tflite";
-    private Interpreter interpreter;
-    private String checkSignal;
-    private CellData cell;
-    ArrayList<String> sample2 = new ArrayList();
-    ArrayList<Float> finalCHAData = new ArrayList();
+
+    //畫ECG
+    private LineChart mLineChart;
+    private LineChart mLineChart2;
+    Float minFloatValue;
+    Float minFloatValue2;
+    double bpm;
+    //FileChooser
+    ChooserDialog chooserDialog;
+    private String chooserFileName;
 
     @SuppressLint("MissingInflatedId")
     @Override
@@ -57,22 +95,30 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         try {
-            init();
+            initItem();
             initPermission();
-            initInterpreter();
-            initPredict();
-            initChooser();
         } catch (Exception e) {
             e.printStackTrace();
         }
+        //關閉標題列
+        ActionBar actionBar = getSupportActionBar();
+        if (actionBar != null) {
+            actionBar.hide();
+        }
+
     }
 
-    public void init() {
+
+    public void initItem() {
+//        mLineChart = findViewById(R.id.chart_line);
+        mLineChart2 = findViewById(R.id.chart_line2);
         textOutput = findViewById(R.id.textOutput);
+        textOutput2 = findViewById(R.id.textOutput2);
         btnFileInput = findViewById(R.id.btnFileInput);
         btnFileOutput = findViewById(R.id.btnFileOutput);
         btnFileOutput2 = findViewById(R.id.btnFileOutput2);
     }
+
 
     /**
      * 檢查權限
@@ -88,41 +134,64 @@ public class MainActivity extends AppCompatActivity {
                 != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 1);
         }
+
+        initChooser();
     }
 
     /**
      * 檔案選擇器
      */
     public void initChooser() {
-        new Thread(() -> {
-            btnFileInput.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    StorageChooser chooser = new StorageChooser.Builder()
-                            .withActivity(MainActivity.this)
-                            .withFragmentManager(getFragmentManager())
-                            .allowCustomPath(true)
-                            .setType(StorageChooser.FILE_PICKER)
-                            .build();
-                    chooser.show();
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                chooserDialog = new ChooserDialog(MainActivity.this)
+                        .withStartFile("/storage/emulated/0/Download/")
+                        .withChosenListener(new ChooserDialog.Result() {
+                            @Override
+                            public void onChoosePath(String dir, File dirFile) {
+                                if (dir.endsWith(".csv")) {
+                                    openCSV(dir);
+                                }
+                                if (dir.endsWith(".CHA")) {
+                                    readCHA(dir);
+                                }
+                                if (dir.endsWith(".lp4")) {
+                                    readLP4(dir);
+                                }
+                                File file = new File(dir);
+                            }
+                        })
 
-                    chooser.setOnSelectListener(new StorageChooser.OnSelectListener() {
-                        @Override
-                        public void onSelect(String path) {
-                            if (path.endsWith(".csv")) {
-                                openCSV(path);
+                        .withOnCancelListener(new DialogInterface.OnCancelListener() {
+                            @Override
+                            public void onCancel(DialogInterface dialog) {
+                                dialog.cancel();
                             }
-                            if (path.endsWith(".CHA")) {
-                                readCHA(path);
+                        });
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        btnFileInput.setOnClickListener(new View.OnClickListener() {
+                            @Override
+                            public void onClick(View v) {
+                                chooserDialog.build();
+                                chooserDialog.show();
                             }
-                            if (path.endsWith(".lp4")) {
-                                readLP4(path);
-                            }
-                        }
-                    });
+                        });
+
+                    }
+                });
+                try {
+                    initInterpreter();
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
-            });
-        }).start();
+
+            }
+        });
+        thread.start();
+        initPredict();
     }
 
     /**
@@ -130,66 +199,70 @@ public class MainActivity extends AppCompatActivity {
      */
     public void initInterpreter() throws IOException {
         Interpreter.Options options = new Interpreter.Options();
-        options.setNumThreads(8);
+        options.setNumThreads(4);
         options.setUseNNAPI(true);
         /** 換模 */
-//        interpreter = new Interpreter(loadModelFile(getAssets(), mModelPath), options);
-        interpreter = new Interpreter(loadModelFile(getAssets(), mModelPath_loose), options);
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+//                    interpreter = new Interpreter(loadModelFile(getAssets(), mModelPath), options);
+                    interpreter = new Interpreter(loadModelFile(getAssets(), mModelPath_loose), options);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
     }
 
     public void initPredict() {
-        new Thread(() -> {
-            /** 預測一段 */
-            btnFileOutput.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    new Thread(() -> {
-                        long startTime = System.currentTimeMillis();
-                        float[] result = doInference(reshapedArray);
-                        Log.d("gggg", "onClick: " + reshapedArray.length);
-                        for (float f : result) {
-                            if (f < 0.5) {
-                                checkSignal = "壞訊號";
-                            } else {
-                                checkSignal = "好訊號";
-                            }
-                        }
-                        runOnUiThread(() -> {
-                            long endTime = System.currentTimeMillis();
-                            float elapsedTime = (endTime - startTime) / 1000;
-                            textOutput.setText(Arrays.toString(result) + "\n" + checkSignal + "\n使用" + elapsedTime + "秒");
-                        });
-                    }).start();
-                }
-            });
-            /** 預測兩段 */
-            btnFileOutput2.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    long startTime = System.currentTimeMillis();
-                    float[] result = doInference(reshapedArray);
-                    float[] result2 = doInference(reshapedArray2);
-                    float[] combined = ArrayUtils.addAll(result, result2);
-                    boolean isGood = true;
-                    for (float f : combined) {
-                        if (f < 0.5) {
-                            isGood = false;
-                        }
-                        break;
-                    }
-                    if (isGood) {
-                        checkSignal = "好訊號";
-                    } else {
+        /** 預測一段 */
+        btnFileOutput.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                long startTime = System.currentTimeMillis();
+                float[] result = doInference(reshapedArray);
+                for (float f : result) {
+                    if (f < 0.1) {
                         checkSignal = "壞訊號";
+                    } else {
+                        checkSignal = "好訊號";
                     }
-                    runOnUiThread(() -> {
-                        long endTime = System.currentTimeMillis();
-                        float elapsedTime = (endTime - startTime) / 1000;
-                        textOutput.setText(Arrays.toString(combined) + "\n" + checkSignal + "\n使用" + elapsedTime + "秒");
-                    });
                 }
-            });
-        }).start();
+                runOnUiThread(() -> {
+                    long endTime = System.currentTimeMillis();
+                    float elapsedTime = (endTime - startTime) / 1000;
+                    textOutput.setText(Arrays.toString(result) + "\n" + checkSignal + "\n使用" + elapsedTime + "秒");
+                });
+            }
+        });
+        /** 預測兩段 */
+        btnFileOutput2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                long startTime = System.currentTimeMillis();
+                float[] result = doInference(reshapedArray);
+                float[] result2 = doInference(reshapedArray2);
+                float[] combined = ArrayUtils.addAll(result, result2);
+                boolean isGood = true;
+                for (float f : combined) {
+                    if (f < 0.1) {
+                        isGood = false;
+                    }
+                    break;
+                }
+                if (isGood) {
+                    checkSignal = "好訊號";
+                } else {
+                    checkSignal = "壞訊號";
+                }
+                runOnUiThread(() -> {
+                    long endTime = System.currentTimeMillis();
+                    float elapsedTime = (endTime - startTime) / 1000;
+                    textOutput.setText(Arrays.toString(combined) + "\n" + checkSignal + "\n使用" + elapsedTime + "秒");
+                });
+            }
+        });
     }
 
     /**
@@ -203,6 +276,9 @@ public class MainActivity extends AppCompatActivity {
         return outputArray;
     }
 
+    /**
+     * 讀LP4
+     */
     private void readLP4(String fileName) {
         tw.com.jchang.geniiecgbt.decompNDK decompNDK = new decompNDK();
         decompNDK.decpEcgFile(fileName);
@@ -210,6 +286,7 @@ public class MainActivity extends AppCompatActivity {
         /** 將副檔名改為.CHA */
         String j = fileName.substring(0, y - 4);
         fileName = j + ".CHA";
+        textOutput.setText("匯入資料成功");
         readCHA(fileName);
     }
 
@@ -219,9 +296,16 @@ public class MainActivity extends AppCompatActivity {
     public void readCHA(String fileName) {
         if (fileName != "") {
             processData = new ProcessData(fileName);
-            processData.run();
-            List<Float> floatData = new ArrayList<>(processData.finalCHAData);
-            setReshapedArray(floatData);
+            try {
+                processData.run();
+                processData.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            textOutput.setText("匯入資料成功");
+            List<Float> chaFloatData = new ArrayList<>(processData.finalCHAData);
+            setReshapedArray(chaFloatData);
+//            setLineChart(chaFloatData);
         }
     }
 
@@ -232,16 +316,24 @@ public class MainActivity extends AppCompatActivity {
         if (fileName != "") {
             readCSVThread = new ReadCSVThread(fileName);
             readCSVThread.run();
-            List<Float> floatData = new ArrayList<>(readCSVThread.csvFloat);
+            List<Float> csvFloatData = new ArrayList<>(readCSVThread.csvFloat);
             textOutput.setText("匯入資料成功");
-            setReshapedArray(floatData);
+//            setLineChart(csvFloatData);
+            bpmCount(csvFloatData);
         } else {
             textOutput.setText("PLS INPUT!!");
         }
     }
 
-    /** reshapeData*/
+    /**
+     * reshapeData
+     */
     private void setReshapedArray(List<Float> floatData) {
+        if (floatData.size() > 24000) {
+            int extraTime = (floatData.size() - 24000) / 2;
+            floatData = floatData.subList(extraTime, floatData.size() - extraTime);
+            floatData = floatData.subList(0, 24000);
+        }
         float[] inputArray = new float[floatData.size()];
         for (int i = 0; i < floatData.size(); i++) {
             inputArray[i] = floatData.get(i);
@@ -256,6 +348,46 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 1; i < 12000; i++) {
             reshapedArray2[0][i][0] = rawSignalSecond[i];
         }
+        bpmCount(floatData);
+    }
+
+    private void bpmCount(List<Float> dataList) {
+        Log.d("eeee", "bpmCount: " + chooserFileName);
+        bpmCountThread = new BpmCountThread(dataList);
+        bpmCountThread.run();
+        minFloatValue2 = bpmCountThread.minFloatValue;
+        Float[] floats = bpmCountThread.resFloat;
+        double bpmUp = bpmCountThread.bpmUp;
+        double bpmDown = bpmCountThread.bpmDown;
+
+        List<Float> dotLocateUp = bpmCountThread.dotLocateUp;
+        List<Float> dotLocateDown = bpmCountThread.dotLocateDown;
+        List<Integer> RRLocateUp = bpmCountThread.RRLocateUp;
+        List<Integer> RRLocateDown = bpmCountThread.RRLocateDown;
+
+        for (int i = 0; i < dotLocateUp.size(); i++) {
+            Log.d("eeee", "Point：" + dotLocateUp.get(i) + "," + RRLocateUp.get(i));
+        }
+        for (int i = 0; i < dotLocateDown.size(); i++) {
+            Log.d("eeee2", "Point：" + dotLocateDown.get(i) + "," + RRLocateDown.get(i));
+        }
+
+        int bpmUpInt = (int) bpmUp;
+        int bpmDownInt = (int) bpmDown;
+
+        if (bpmUpInt >= 30 && bpmUpInt <= 200 && bpmDownInt >= 30 && bpmDownInt <= 200) {
+            textOutput.setText("檔名：" + chooserFileName + "\nBPM Up: " + bpmUpInt);
+        } else if (bpmUpInt < 30 || bpmUpInt > 200) {
+            if (bpmDownInt < 30 || bpmDownInt > 200) {
+                textOutput.setText("檔名：" + chooserFileName + "\n無法計算");
+            } else {
+                textOutput.setText("檔名：" + chooserFileName + "\nBPM Down:" + bpmDownInt);
+            }
+        } else {
+            textOutput.setText("檔名：" + chooserFileName + "\nBPM Up:" + bpmUpInt);
+        }
+        setLineChart2(floats);
+//        makeCSV(floats);
     }
 
     /**
@@ -269,4 +401,156 @@ public class MainActivity extends AppCompatActivity {
         long declaredLength = fileDescriptor.getDeclaredLength();
         return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
     }
+
+    /**
+     * 心電圖
+     */
+    public void setLineChart(List<Float> dataList) {
+        //設置XY軸
+        List<Entry> entries = new ArrayList<>();
+        dataList = dataList.subList(0, 24000);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            minFloatValue = dataList.stream().min(Float::compareTo).get();
+        }
+        for (int i = 0; i < dataList.size(); i++)
+            entries.add(new Entry(i, dataList.get(i)));
+        LineDataSet dataSet = new LineDataSet(entries, "");//標籤
+        //Color
+        dataSet.setColor(Color.parseColor("#7d7d7d"));//線條顏色
+        dataSet.setCircleColor(Color.parseColor("#7d7d7d"));//圓點顏色
+        dataSet.setLineWidth(1.5f);//線條寬度
+        dataSet.setDrawCircles(false);//關閉點點
+        //設置數據
+        LineData lineData = new LineData(dataSet);
+        lineData.setDrawValues(false);//是否繪製線條上的文字
+        mLineChart.setData(lineData);
+        mLineChart.fitScreen();//自動調整
+        mLineChart.getDescription().setEnabled(false);//取消圖表敘述
+        mLineChart.setScaleYEnabled(false);//禁止Y軸上下拖動
+        mLineChart.setBackgroundColor(Color.parseColor("#fff3fa"));
+        //設置Y軸樣式
+        YAxis rightAxis = mLineChart.getAxisRight();//設置圖表右邊
+        rightAxis.setEnabled(false);//設置圖表右邊的y軸禁用
+        YAxis leftAxis = mLineChart.getAxisLeft();//設置圖表左邊
+        leftAxis.setEnabled(true);//設置圖表左邊的y軸禁用
+        leftAxis.setAxisMinimum(minFloatValue - 0.2f);//設置最小數值
+        //設置x軸
+        XAxis xAxis = mLineChart.getXAxis();
+        xAxis.setTextColor(Color.parseColor("#333333"));
+        xAxis.setTextSize(1f);
+        xAxis.setAxisMinimum(50f);
+        xAxis.setDrawAxisLine(true);//是否繪製軸線
+        xAxis.setDrawGridLines(false);//設置x軸上每個點對應的線
+        xAxis.setDrawLabels(false);//繪製標籤  指x軸上的對應數值
+        xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);//設置x軸的顯示位置
+        xAxis.setGranularity(1f);//禁止放大後x軸標籤重繪
+        xAxis.setEnabled(true);
+        xAxis.setDrawGridLines(true);//背景網格
+        //slide
+        float scaleX = mLineChart.getScaleX();
+        if (scaleX == 1)
+            mLineChart.zoomToCenter(5, 1f);
+        else {
+            BarLineChartTouchListener barLineChartTouchListener = (BarLineChartTouchListener) mLineChart.getOnTouchListener();
+            barLineChartTouchListener.stopDeceleration();
+            mLineChart.fitScreen();
+        }
+        mLineChart.invalidate();//refresh
+    }
+
+    public void setLineChart2(Float[] floats) {
+        /** 畫圖*/
+        List<Entry> entries = new ArrayList<>();
+        for (int i = 0; i < floats.length; i++) {
+            entries.add(new Entry(i, floats[i]));
+        }
+        LineDataSet dataSet = new LineDataSet(entries, "");//標籤
+        //Color
+        dataSet.setColor(Color.parseColor("#7d7d7d"));//線條顏色
+        dataSet.setCircleColor(Color.parseColor("#7d7d7d"));//圓點顏色
+        dataSet.setLineWidth(1.5f);//線條寬度
+        dataSet.setDrawCircles(false);//關閉點點
+        //設置數據
+        LineData lineData = new LineData(dataSet);
+        lineData.setDrawValues(false);//是否繪製線條上的文字
+        mLineChart2.setData(lineData);
+        mLineChart2.fitScreen();//自動調整
+        mLineChart2.getDescription().setEnabled(false);//取消圖表敘述
+        mLineChart2.setScaleYEnabled(false);//禁止Y軸上下拖動
+        mLineChart2.setBackgroundColor(Color.parseColor("#fff3fa"));
+        //設置Y軸樣式
+        YAxis rightAxis = mLineChart2.getAxisRight();//設置圖表右邊
+        rightAxis.setEnabled(false);//設置圖表右邊的y軸禁用
+        YAxis leftAxis = mLineChart2.getAxisLeft();//設置圖表左邊
+        leftAxis.setEnabled(true);//設置圖表左邊的y軸禁用
+        leftAxis.setAxisMinimum(minFloatValue2);//設置最小數值
+        //設置x軸
+        XAxis xAxis = mLineChart2.getXAxis();
+        xAxis.setTextColor(Color.parseColor("#333333"));
+        xAxis.setTextSize(1f);
+        xAxis.setAxisMinimum(50f);
+        xAxis.setDrawAxisLine(true);//是否繪製軸線
+        xAxis.setDrawGridLines(false);//設置x軸上每個點對應的線
+        xAxis.setDrawLabels(false);//繪製標籤  指x軸上的對應數值
+        xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);//設置x軸的顯示位置
+        xAxis.setGranularity(1f);//禁止放大後x軸標籤重繪
+        xAxis.setEnabled(true);
+        xAxis.setDrawGridLines(true);//背景網格
+        //slide
+        float scaleX = mLineChart2.getScaleX();
+        if (scaleX == 1)
+            mLineChart2.zoomToCenter(5, 1f);
+        else {
+            BarLineChartTouchListener barLineChartTouchListener = (BarLineChartTouchListener) mLineChart.getOnTouchListener();
+            barLineChartTouchListener.stopDeceleration();
+            mLineChart2.fitScreen();
+        }
+        mLineChart2.invalidate();//refresh
+    }
+
+    private void makeCSV(Float[] floats) {
+
+        new Thread(() -> {
+            /** 檔名 */
+            String date = new SimpleDateFormat("yyyy-MM-dd-hhmmss",
+                    Locale.getDefault()).format(System.currentTimeMillis());
+            String fileName = "[" + date + "]Lead2Data.csv";
+            String[] title = {"Lead2"};
+            StringBuffer csvText = new StringBuffer();
+            for (int i = 0; i < title.length; i++) {
+                csvText.append(title[i] + ",");
+            }
+            /** 內容 */
+            for (int i = 0; i < floats.length; i++) {
+                csvText.append("\n" + floats[i]);
+            }
+
+            Log.d("CSV", "makeCSV: " + csvText);
+            runOnUiThread(() -> {
+                try {
+                    StrictMode.VmPolicy.Builder builder = new StrictMode.VmPolicy.Builder();
+                    StrictMode.setVmPolicy(builder.build());
+                    builder.detectFileUriExposure();
+                    FileOutputStream out = openFileOutput(fileName, Context.MODE_PRIVATE);
+                    out.write((csvText.toString().getBytes()));
+                    out.close();
+                    File fileLocation = new File(Environment.getExternalStorageDirectory().getAbsolutePath(), fileName);
+                    FileOutputStream fos = new FileOutputStream(fileLocation);
+                    fos.write(csvText.toString().getBytes());
+                    Uri path = Uri.fromFile(fileLocation);
+                    Intent fileIntent = new Intent(Intent.ACTION_SEND);
+                    fileIntent.setType("text/csv");
+                    fileIntent.putExtra(Intent.EXTRA_SUBJECT, fileName);
+                    fileIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    fileIntent.putExtra(Intent.EXTRA_STREAM, path);
+                    Log.d("location", "makeCSV: " + fileLocation);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+        }).start();
+    }//makeCSV
+
 }

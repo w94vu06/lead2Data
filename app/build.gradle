@@ -1,5 +1,6 @@
 plugins {
     id 'com.android.application'
+//    id 'com.chaquo.python'
 }
 
 android {
@@ -17,6 +18,16 @@ android {
             abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
         }
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+//        python{
+//            buildPython "D:/Anaconda/python.exe"
+//            pip {
+//                install "numpy"
+//                install "pandas"
+//                install "neurokit2==0.1.4.1"
+//                install "statistics"
+//                install "pathlib"
+//            }
+//        }
     }
     sourceSets.main{
         jni.srcDirs=[]
@@ -38,6 +49,7 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+
     dataBinding {
         enabled = true
     }
@@ -48,6 +60,12 @@ android {
             }
         }
     }
+    //new file-chooser
+    configurations.all {
+        resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+        resolutionStrategy.cacheDynamicVersionsFor 0, 'seconds'
+    }
+
 
 }
 
@@ -65,13 +83,20 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.1.4'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.0'
 
-
+    //CSV
     implementation 'com.opencsv:opencsv:4.6'
-    implementation 'com.github.salehyarahmadi:FileAndFolderPicker:1.0.4'
-
+    //Tensor
     implementation 'org.tensorflow:tensorflow-lite:2.2.0'
     implementation 'org.tensorflow:proto:1.15.0'
+    //ECG
+    implementation 'com.github.PhilJay:MPAndroidChart:v3.1.0'
+    //FileChooser
+    implementation 'com.github.hedzr:android-file-chooser:v1.2.0-final'
+    //Python
+    implementation 'com.chaquo.python:gradle:13.0.0'
+    //巴特沃斯
+    implementation group: 'uk.me.berndporr', name:'iirj', version: '1.5'
 
-    implementation 'com.github.codekidX:storage-chooser:2.0.4.4'
+
 
 }

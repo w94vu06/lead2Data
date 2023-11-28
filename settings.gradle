@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "lead2Data"
 include ':app'
+

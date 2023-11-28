@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="WaveView">
+        <!--最大值-->
+        <attr name="max_value" format="integer" />
+        <!--波形圖折線單位寬度，通過修改該參數，控制橫坐標的單位-->
+        <attr name="wave_line_width" format="integer" />
+
+        <!--波形圖折線的線寬-->
+        <attr name="wave_line_stroke_width" format="integer" />
+        <!--波形圖折線的顏色-->
+        <attr name="wave_line_color" format="string" />
+        <!--背景網格圖的顏色-->
+        <attr name="grid_line_color" format="string" />
+        <!--背景顏色，默認為黑-->
+        <attr name="wave_background" format="string"/>
+        <!--背景網格是否可見-->
+        <attr name="grid_visible" format="boolean" />
+        <!--波形圖繪製模式，常規和循環-->
+        <attr name="draw_mode" format="enum">
+            <enum name="normal" value="0" />
+            <enum name="loop" value="1" />
+        </attr>
+    </declare-styleable>
+</resources>

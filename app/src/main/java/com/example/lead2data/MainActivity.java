@@ -1,8 +1,8 @@
 package com.example.lead2data;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.ActionBar;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.Manifest;
@@ -19,19 +19,22 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.StrictMode;
-import android.provider.DocumentsContract;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
 import com.github.mikephil.charting.charts.LineChart;
+import com.github.mikephil.charting.charts.ScatterChart;
 import com.github.mikephil.charting.components.XAxis;
 import com.github.mikephil.charting.components.YAxis;
+import com.github.mikephil.charting.data.CombinedData;
 import com.github.mikephil.charting.data.Entry;
 import com.github.mikephil.charting.data.LineData;
 import com.github.mikephil.charting.data.LineDataSet;
-import com.github.mikephil.charting.listener.BarLineChartTouchListener;
+import com.github.mikephil.charting.data.ScatterData;
+import com.github.mikephil.charting.data.ScatterDataSet;
 import com.obsez.android.lib.filechooser.ChooserDialog;
 
 import org.apache.commons.lang3.ArrayUtils;
@@ -80,8 +83,10 @@ public class MainActivity extends AppCompatActivity {
     private final String mModelPath_loose = "mymodel_loose.tflite";
 
     //畫ECG
+
     private LineChart mLineChart;
     private LineChart mLineChart2;
+    private LineChart mLineChart3;
     Float minFloatValue;
     Float minFloatValue2;
     double bpm;
@@ -108,12 +113,24 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        initChooser();
+        try {
+            initInterpreter();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     public void initItem() {
-//        mLineChart = findViewById(R.id.chart_line);
+
+        mLineChart = findViewById(R.id.chart_line);
         mLineChart2 = findViewById(R.id.chart_line2);
+        mLineChart3 = findViewById(R.id.chart_line3);
         textOutput = findViewById(R.id.textOutput);
-        textOutput2 = findViewById(R.id.textOutput2);
+//        textOutput2 = findViewById(R.id.textOutput2);
         btnFileInput = findViewById(R.id.btnFileInput);
         btnFileOutput = findViewById(R.id.btnFileOutput);
         btnFileOutput2 = findViewById(R.id.btnFileOutput2);
@@ -135,8 +152,23 @@ public class MainActivity extends AppCompatActivity {
             requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 1);
         }
 
-        initChooser();
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()) {
+        } else {
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setMessage("本程式需要您同意允許存取所有檔案權限");
+            builder.setPositiveButton("同意", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                    startActivity(intent);
+                }
+            });
+            builder.show();
+        }
+
+
     }
+
 
     /**
      * 檔案選擇器
@@ -145,8 +177,9 @@ public class MainActivity extends AppCompatActivity {
         Thread thread = new Thread(new Runnable() {
             @Override
             public void run() {
+                String externalStorageDirectory = Environment.getExternalStorageDirectory().getAbsolutePath();
                 chooserDialog = new ChooserDialog(MainActivity.this)
-                        .withStartFile("/storage/emulated/0/Download/")
+                        .withStartFile(externalStorageDirectory)
                         .withChosenListener(new ChooserDialog.Result() {
                             @Override
                             public void onChoosePath(String dir, File dirFile) {
@@ -167,6 +200,7 @@ public class MainActivity extends AppCompatActivity {
                             @Override
                             public void onCancel(DialogInterface dialog) {
                                 dialog.cancel();
+
                             }
                         });
                 runOnUiThread(new Runnable() {
@@ -182,12 +216,6 @@ public class MainActivity extends AppCompatActivity {
 
                     }
                 });
-                try {
-                    initInterpreter();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
             }
         });
         thread.start();
@@ -352,26 +380,27 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void bpmCount(List<Float> dataList) {
-        Log.d("eeee", "bpmCount: " + chooserFileName);
         bpmCountThread = new BpmCountThread(dataList);
         bpmCountThread.run();
         minFloatValue2 = bpmCountThread.minFloatValue;
-        Float[] floats = bpmCountThread.resFloat;
+        Float[] floats = bpmCountThread.resultFloatArray;
+        List<Integer> T_index = bpmCountThread.T_index;
+        List<Integer> R_index = bpmCountThread.R_index;
+
         double bpmUp = bpmCountThread.bpmUp;
         double bpmDown = bpmCountThread.bpmDown;
 
-        List<Float> dotLocateUp = bpmCountThread.dotLocateUp;
-        List<Float> dotLocateDown = bpmCountThread.dotLocateDown;
-        List<Integer> RRLocateUp = bpmCountThread.RRLocateUp;
-        List<Integer> RRLocateDown = bpmCountThread.RRLocateDown;
-
-        for (int i = 0; i < dotLocateUp.size(); i++) {
-            Log.d("eeee", "Point：" + dotLocateUp.get(i) + "," + RRLocateUp.get(i));
-        }
-        for (int i = 0; i < dotLocateDown.size(); i++) {
-            Log.d("eeee2", "Point：" + dotLocateDown.get(i) + "," + RRLocateDown.get(i));
-        }
-
+//        List<Float> dotLocateUp = bpmCountThread.R_dot_up;
+//        List<Float> dotLocateDown = bpmCountThread.dotLocateDown;
+//        List<Integer> RRLocateUp = bpmCountThread.R_index;
+//        List<Integer> RRLocateDown = bpmCountThread.R_index_down;
+//
+//        for (int i = 0; i < dotLocateUp.size(); i++) {
+//            Log.d("eeee", "Point：" + dotLocateUp.get(i) + "," + RRLocateUp.get(i));
+//        }
+//        for (int i = 0; i < dotLocateDown.size(); i++) {
+//            Log.d("eeee2", "Point：" + dotLocateDown.get(i) + "," + RRLocateDown.get(i));
+//        }
         int bpmUpInt = (int) bpmUp;
         int bpmDownInt = (int) bpmDown;
 
@@ -386,7 +415,11 @@ public class MainActivity extends AppCompatActivity {
         } else {
             textOutput.setText("檔名：" + chooserFileName + "\nBPM Up:" + bpmUpInt);
         }
+
+        setLineChart(floats);
         setLineChart2(floats);
+        setLineChart3(floats);
+
 //        makeCSV(floats);
     }
 
@@ -402,27 +435,78 @@ public class MainActivity extends AppCompatActivity {
         return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
     }
 
+    public List<Entry> getDataBetweenTwoR(List<Float> dataList, int startIndex, int endIndex) {
+        List<Entry> dataBetweenTwoR = new ArrayList<>();
+
+        startIndex = Math.max(0, startIndex);
+        endIndex = Math.min(dataList.size() - 1, endIndex);
+
+        for (int i = startIndex; i <= endIndex; i++) {
+            int xOffset = i - startIndex;
+            dataBetweenTwoR.add(new Entry(xOffset, dataList.get(i)));
+            Log.d("xxxx", ""+dataList.get(i));
+        }
+
+        return dataBetweenTwoR;
+    }
+
     /**
      * 心電圖
      */
-    public void setLineChart(List<Float> dataList) {
-        //設置XY軸
-        List<Entry> entries = new ArrayList<>();
-        dataList = dataList.subList(0, 24000);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            minFloatValue = dataList.stream().min(Float::compareTo).get();
+    public void setLineChart(Float[] floats) {
+        Float[] selected = Arrays.copyOfRange(floats, 15, 1362);
+
+        List<Float> R_dot_up = bpmCountThread.R_dot_up;
+        List<Integer> R_index = bpmCountThread.R_index;
+
+        /** 畫圖*/
+        List<Entry> entries1 = new ArrayList<>();
+        List<Entry> entries2 = new ArrayList<>();
+        List<Entry> entries3 = new ArrayList<>();
+
+        for (int i = 0; i < 10000; i++) {
+            entries1.add(new Entry(i, floats[i]));
         }
-        for (int i = 0; i < dataList.size(); i++)
-            entries.add(new Entry(i, dataList.get(i)));
-        LineDataSet dataSet = new LineDataSet(entries, "");//標籤
-        //Color
-        dataSet.setColor(Color.parseColor("#7d7d7d"));//線條顏色
-        dataSet.setCircleColor(Color.parseColor("#7d7d7d"));//圓點顏色
-        dataSet.setLineWidth(1.5f);//線條寬度
-        dataSet.setDrawCircles(false);//關閉點點
-        //設置數據
-        LineData lineData = new LineData(dataSet);
-        lineData.setDrawValues(false);//是否繪製線條上的文字
+
+        for (int i = 0; i < 10000; i++) {
+
+            if (R_index.contains(i)) {
+                // 如果当前索引在R_index中，则从R_dot_up中获取对应的值
+                entries2.add(new Entry(i, R_dot_up.get(R_index.indexOf(i))));
+            } else {
+                // 如果当前索引不在R_index中，将值设为0
+                entries2.add(new Entry(i, 0));
+            }
+        }
+
+//        entries1 = getDataBetweenTwoR(Arrays.asList(floats), R_index.get(6), R_index.get(8));
+//        for (Entry entry : entries1) {
+//            float yValue = entry.getY();
+//            Log.d("YYYY", String.valueOf(yValue));
+//        }
+//        entries2 = getDataBetweenTwoR(Arrays.asList(floats), 15, 1362);
+//        entries3 = getDataBetweenTwoR(Arrays.asList(floats), R_index.get(4), R_index.get(6));
+
+        LineDataSet dataSet1 = new LineDataSet(entries1, "R1");
+        LineDataSet dataSet2 = new LineDataSet(entries2, "R2");
+        LineDataSet dataSet3 = new LineDataSet(entries3, "R3");
+
+        // Customize dataSet1, dataSet2, and dataSet3 as needed
+        dataSet1.setColor(Color.RED);
+        dataSet1.setCircleColor(Color.RED);
+        dataSet2.setColor(Color.BLUE);
+        dataSet2.setCircleColor(Color.BLUE);
+        dataSet3.setColor(Color.GREEN);
+        dataSet3.setCircleColor(Color.GREEN);
+
+        dataSet1.setLineWidth(1.5f);
+        dataSet1.setDrawCircles(false);
+        dataSet2.setLineWidth(1.5f);
+        dataSet2.setDrawCircles(false);
+        dataSet3.setLineWidth(1.5f);
+        dataSet3.setDrawCircles(false);
+
+        LineData lineData = new LineData(dataSet1,dataSet2);
         mLineChart.setData(lineData);
         mLineChart.fitScreen();//自動調整
         mLineChart.getDescription().setEnabled(false);//取消圖表敘述
@@ -433,80 +517,126 @@ public class MainActivity extends AppCompatActivity {
         rightAxis.setEnabled(false);//設置圖表右邊的y軸禁用
         YAxis leftAxis = mLineChart.getAxisLeft();//設置圖表左邊
         leftAxis.setEnabled(true);//設置圖表左邊的y軸禁用
-        leftAxis.setAxisMinimum(minFloatValue - 0.2f);//設置最小數值
+        leftAxis.setAxisMinimum(minFloatValue2);//設置最小數值
         //設置x軸
         XAxis xAxis = mLineChart.getXAxis();
         xAxis.setTextColor(Color.parseColor("#333333"));
         xAxis.setTextSize(1f);
-        xAxis.setAxisMinimum(50f);
+
         xAxis.setDrawAxisLine(true);//是否繪製軸線
         xAxis.setDrawGridLines(false);//設置x軸上每個點對應的線
         xAxis.setDrawLabels(false);//繪製標籤  指x軸上的對應數值
         xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);//設置x軸的顯示位置
         xAxis.setGranularity(1f);//禁止放大後x軸標籤重繪
         xAxis.setEnabled(true);
-        xAxis.setDrawGridLines(true);//背景網格
+        xAxis.setDrawGridLines(false);//背景網格
+
         //slide
-        float scaleX = mLineChart.getScaleX();
-        if (scaleX == 1)
-            mLineChart.zoomToCenter(5, 1f);
-        else {
-            BarLineChartTouchListener barLineChartTouchListener = (BarLineChartTouchListener) mLineChart.getOnTouchListener();
-            barLineChartTouchListener.stopDeceleration();
-            mLineChart.fitScreen();
-        }
-        mLineChart.invalidate();//refresh
+//        float scaleX = mLineChart2.getScaleX();
+//        if (scaleX == 1)
+//            mLineChart2.zoomToCenter(5, 1f);
+//        else {
+//            BarLineChartTouchListener barLineChartTouchListener = (BarLineChartTouchListener) mLineChart.getOnTouchListener();
+//            barLineChartTouchListener.stopDeceleration();
+//            mLineChart2.fitScreen();
+//        }
+//        mLineChart2.invalidate();//refresh
     }
 
     public void setLineChart2(Float[] floats) {
+        Float[] selected = Arrays.copyOfRange(floats, 15, 1362);
+
+        List<Float> R_dot_up = bpmCountThread.R_dot_up;
+        List<Integer> R_index = bpmCountThread.R_index;
+
         /** 畫圖*/
-        List<Entry> entries = new ArrayList<>();
-        for (int i = 0; i < floats.length; i++) {
-            entries.add(new Entry(i, floats[i]));
-        }
-        LineDataSet dataSet = new LineDataSet(entries, "");//標籤
-        //Color
-        dataSet.setColor(Color.parseColor("#7d7d7d"));//線條顏色
-        dataSet.setCircleColor(Color.parseColor("#7d7d7d"));//圓點顏色
-        dataSet.setLineWidth(1.5f);//線條寬度
-        dataSet.setDrawCircles(false);//關閉點點
-        //設置數據
-        LineData lineData = new LineData(dataSet);
-        lineData.setDrawValues(false);//是否繪製線條上的文字
+        List<Entry> entries1 = new ArrayList<>();
+
+        entries1 = getDataBetweenTwoR(Arrays.asList(floats), R_index.get(2), R_index.get(4));
+
+        LineDataSet dataSet1 = new LineDataSet(entries1, "R1");
+
+        // Customize dataSet1, dataSet2, and dataSet3 as needed
+        dataSet1.setColor(Color.RED);
+        dataSet1.setCircleColor(Color.RED);
+
+        dataSet1.setLineWidth(1.5f);
+        dataSet1.setDrawCircles(false);
+
+        LineData lineData = new LineData(dataSet1);
         mLineChart2.setData(lineData);
         mLineChart2.fitScreen();//自動調整
         mLineChart2.getDescription().setEnabled(false);//取消圖表敘述
         mLineChart2.setScaleYEnabled(false);//禁止Y軸上下拖動
         mLineChart2.setBackgroundColor(Color.parseColor("#fff3fa"));
         //設置Y軸樣式
-        YAxis rightAxis = mLineChart2.getAxisRight();//設置圖表右邊
+        YAxis rightAxis = mLineChart.getAxisRight();//設置圖表右邊
         rightAxis.setEnabled(false);//設置圖表右邊的y軸禁用
-        YAxis leftAxis = mLineChart2.getAxisLeft();//設置圖表左邊
+        YAxis leftAxis = mLineChart.getAxisLeft();//設置圖表左邊
         leftAxis.setEnabled(true);//設置圖表左邊的y軸禁用
         leftAxis.setAxisMinimum(minFloatValue2);//設置最小數值
         //設置x軸
-        XAxis xAxis = mLineChart2.getXAxis();
+        XAxis xAxis = mLineChart.getXAxis();
         xAxis.setTextColor(Color.parseColor("#333333"));
         xAxis.setTextSize(1f);
-        xAxis.setAxisMinimum(50f);
+
         xAxis.setDrawAxisLine(true);//是否繪製軸線
         xAxis.setDrawGridLines(false);//設置x軸上每個點對應的線
         xAxis.setDrawLabels(false);//繪製標籤  指x軸上的對應數值
         xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);//設置x軸的顯示位置
         xAxis.setGranularity(1f);//禁止放大後x軸標籤重繪
         xAxis.setEnabled(true);
-        xAxis.setDrawGridLines(true);//背景網格
-        //slide
-        float scaleX = mLineChart2.getScaleX();
-        if (scaleX == 1)
-            mLineChart2.zoomToCenter(5, 1f);
-        else {
-            BarLineChartTouchListener barLineChartTouchListener = (BarLineChartTouchListener) mLineChart.getOnTouchListener();
-            barLineChartTouchListener.stopDeceleration();
-            mLineChart2.fitScreen();
-        }
-        mLineChart2.invalidate();//refresh
+        xAxis.setDrawGridLines(false);//背景網格
     }
+
+    public void setLineChart3(Float[] floats) {
+        Float[] selected = Arrays.copyOfRange(floats, 15, 1362);
+
+        List<Float> R_dot_up = bpmCountThread.R_dot_up;
+        List<Integer> R_index = bpmCountThread.R_index;
+
+        /** 畫圖*/
+        List<Entry> entries1 = new ArrayList<>();
+
+        entries1 = getDataBetweenTwoR(Arrays.asList(floats), R_index.get(6), R_index.get(8));
+
+        LineDataSet dataSet1 = new LineDataSet(entries1, "R1");
+
+        // Customize dataSet1, dataSet2, and dataSet3 as needed
+        dataSet1.setColor(Color.RED);
+        dataSet1.setCircleColor(Color.RED);
+
+        dataSet1.setLineWidth(1.5f);
+        dataSet1.setDrawCircles(false);
+
+        LineData lineData = new LineData(dataSet1);
+        mLineChart3.setData(lineData);
+        mLineChart3.fitScreen();//自動調整
+        mLineChart3.getDescription().setEnabled(false);//取消圖表敘述
+        mLineChart3.setScaleYEnabled(false);//禁止Y軸上下拖動
+        mLineChart3.setBackgroundColor(Color.parseColor("#fff3fa"));
+        //設置Y軸樣式
+        YAxis rightAxis = mLineChart.getAxisRight();//設置圖表右邊
+        rightAxis.setEnabled(false);//設置圖表右邊的y軸禁用
+        YAxis leftAxis = mLineChart.getAxisLeft();//設置圖表左邊
+        leftAxis.setEnabled(true);//設置圖表左邊的y軸禁用
+        leftAxis.setAxisMinimum(minFloatValue2);//設置最小數值
+        //設置x軸
+        XAxis xAxis = mLineChart.getXAxis();
+        xAxis.setTextColor(Color.parseColor("#333333"));
+        xAxis.setTextSize(1f);
+
+        xAxis.setDrawAxisLine(true);//是否繪製軸線
+        xAxis.setDrawGridLines(false);//設置x軸上每個點對應的線
+        xAxis.setDrawLabels(false);//繪製標籤  指x軸上的對應數值
+        xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);//設置x軸的顯示位置
+        xAxis.setGranularity(1f);//禁止放大後x軸標籤重繪
+        xAxis.setEnabled(true);
+        xAxis.setDrawGridLines(false);//背景網格
+    }
+
+
+
 
     private void makeCSV(Float[] floats) {
 
@@ -552,5 +682,6 @@ public class MainActivity extends AppCompatActivity {
             });
         }).start();
     }//makeCSV
+
 
 }

@@ -9,7 +9,7 @@
     <TextView
         android:id="@+id/textOutput"
         android:layout_width="match_parent"
-        android:layout_height="120dp"
+        android:layout_height="wrap_content"
         android:text="N/A"
         android:textAlignment="center"
         android:textSize="25dp"
@@ -34,7 +34,7 @@
 
 
     <com.github.mikephil.charting.charts.LineChart
-        android:id="@+id/chart_line2"
+        android:id="@+id/chart_line"
         android:layout_width="match_parent"
         android:layout_height="200dp"
         android:layout_marginBottom="160dp"
@@ -45,36 +45,43 @@
         app:layout_constraintTop_toBottomOf="@+id/textOutput"
         app:layout_constraintVertical_bias="0.085" />
 
-    <ScrollView
-        android:id="@+id/scrollView_dr"
+    <com.github.mikephil.charting.charts.LineChart
+        android:id="@+id/chart_line2"
         android:layout_width="match_parent"
-        android:layout_height="176dp"
-        android:fillViewport="true"
+        android:layout_height="200dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.603">
+        app:layout_constraintTop_toBottomOf="@+id/chart_line"
+        app:layout_constraintVertical_bias="0.0" />
 
-        <androidx.appcompat.widget.LinearLayoutCompat
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content">
-            <TextView
-                android:id="@+id/textOutput2"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:text="N/A"
-                android:textAlignment="center"
-                android:textSize="25dp"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintHorizontal_bias="0.0"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintVertical_bias="0.214" />
-        </androidx.appcompat.widget.LinearLayoutCompat>
-    </ScrollView>
+    <com.github.mikephil.charting.charts.LineChart
+        android:id="@+id/chart_line3"
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/chart_line2"
+        app:layout_constraintVertical_bias="0.0" />
+
+    <!--    <ScrollView-->
+<!--        android:id="@+id/scrollView_dr"-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="176dp"-->
+<!--        android:fillViewport="true"-->
+<!--        app:layout_constraintBottom_toBottomOf="parent"-->
+<!--        app:layout_constraintEnd_toEndOf="parent"-->
+<!--        app:layout_constraintHorizontal_bias="0.0"-->
+<!--        app:layout_constraintStart_toStartOf="parent"-->
+<!--        app:layout_constraintTop_toTopOf="parent"-->
+<!--        app:layout_constraintVertical_bias="0.814">-->
+
+<!--    </ScrollView>-->
+
+
 
     <Button
         android:id="@+id/btnFileOutput2"
